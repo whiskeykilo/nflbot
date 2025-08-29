@@ -12,6 +12,10 @@ KELLY_FRAC = float(os.getenv("KELLY_FRACTION","0.5"))
 MAX_UNIT   = float(os.getenv("MAX_UNIT","0.02"))
 TITLE      = "NFL +EV Signals (Hard Rock)"
 
+# When to run scheduled jobs
+SUNDAY_RUN_TIME  = os.getenv("SUNDAY_RUN_TIME", "12:00")
+WEEKDAY_RUN_TIME = os.getenv("WEEKDAY_RUN_TIME", "09:00")
+
 def clamp(x, lo, hi): return max(lo, min(hi, x))
 
 def run_once():
@@ -49,9 +53,8 @@ def run_once():
     push(TITLE, lines)
 
 def schedule_jobs():
-    # NFL-heavy windows: Sunday every 5m; otherwise every 15m
-    schedule.every(5).minutes.do(run_once).tag("sun")    # will run daily; it's fine for MVP
-    schedule.every(15).minutes.do(run_once).tag("wk")
+    schedule.every().sunday.at(SUNDAY_RUN_TIME).do(run_once).tag("sun")
+    schedule.every().day.at(WEEKDAY_RUN_TIME).do(run_once).tag("wk")
     run_once()  # fire immediately
 
 if __name__=="__main__":
