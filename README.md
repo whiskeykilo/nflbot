@@ -40,7 +40,7 @@ Controls:
 ### 1. Build the image
 
 ```bash
-docker build -t nflbot:3.12 .
+docker build -t nflbot:0.1.0 .
 ```
 
 ### 2. Configure the Discord webhook
@@ -72,7 +72,7 @@ docker run --name nflbot \
   -e THEODDSAPI="${THEODDSAPI:-}" \
   -v $(pwd)/data:/data \
   --restart unless-stopped \
-  nflbot:3.12
+  nflbot:0.1.0
 ```
 
 The bot self-schedules using the `schedule` library and does not require a host
