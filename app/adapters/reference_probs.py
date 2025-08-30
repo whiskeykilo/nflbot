@@ -7,7 +7,7 @@ is unavailable or does not contain a given game, we fall back to deriving the
 probabilities directly from the odds supplied with each game.
 
 The external request requires an API key in the environment variable
-``ODDS_API_KEY``.  Missing keys, network issues or unexpected payloads all
+``THEODDSAPI``.  Missing keys, network issues or unexpected payloads all
 trigger the local fallback behaviour.
 """
 
@@ -87,7 +87,7 @@ def reference_probs_for(games: List[Dict]) -> Dict[str, Dict[str, float]]:
         "regions": "us",
         "bookmakers": BOOKMAKER,
     }
-    api_key = os.getenv("ODDS_API_KEY")
+    api_key = os.getenv("THEODDSAPI")
     if api_key:
         params["apiKey"] = api_key
 
