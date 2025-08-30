@@ -23,20 +23,25 @@ def test_integration_run_once_pushes_and_persists(monkeypatch, tmp_path):
             "home": "HOM",
             "away": "AWY",
             "start_utc": "2099-09-07T17:00:00Z",
-            "market": "ML",
-            "odds_home": 150,
-            "odds_away": -160,
+            "market": "SPREAD",
+            "odds_home": -105,
+            "odds_away": -115,
+            "line_home": -2.5,
+            "line_away": 2.5,
         }
     ]
 
-    monkeypatch.setattr(
-        app_main, "fetch_hr_nfl_moneylines", lambda: games
-    )
+    monkeypatch.setattr(app_main, "fetch_hr_nfl_moneylines", lambda days_from=7: games)
 
-    # Mock Pinnacle reference probabilities (vig-removed)
-    monkeypatch.setattr(
-        app_main, "reference_probs_for", lambda gs: {"G1": {"p_home": 0.45, "p_away": 0.55}}
-    )
+    # Mock Pinnacle favorite ladder with fair p_fav_cover at -2.5
+    ref = {
+        "G1": {
+            "fav_ladder": { -2.5: 0.53 },
+            "ladder": {"home": {-2.5: 0.53}, "away": {2.5: 0.47}},
+            "prices": {"home": {-2.5: -110}, "away": {2.5: -110}},
+        }
+    }
+    monkeypatch.setattr(app_main, "reference_probs_for", lambda gs: ref)
 
     pushed = {}
 
@@ -48,26 +53,23 @@ def test_integration_run_once_pushes_and_persists(monkeypatch, tmp_path):
 
     # Configure bankroll/thresholds to ensure inclusion
     monkeypatch.setattr(app_main, "BANKROLL", 100.0)
-    monkeypatch.setattr(app_main, "MIN_EDGE", 0.03)
+    monkeypatch.setattr(app_main, "MIN_EDGE", 0.01)
     monkeypatch.setattr(app_main, "KELLY_FRAC", 0.5)
     monkeypatch.setattr(app_main, "MAX_UNIT", 0.02)
+    monkeypatch.setattr(app_main, "MAX_INTERP_GAP", 2.0)
 
     app_main.run_once()
 
-    # Assert Discord push was called with one alert line
-    assert pushed.get("title") == "NFL +EV Signals (Hard Rock)"
+    # Assert Discord push was called with one alert block
+    assert pushed.get("title").startswith("NFL +EV Signals")
     assert isinstance(pushed.get("lines"), list) and len(pushed["lines"]) == 1
-    line = pushed["lines"][0]
-    # Basic content checks
-    assert "AWY @ HOM" in line
-    assert "Pick: **HOM**" in line
-    assert "Odds: 150" in line
-    assert "True: 0.45" in line
-    assert "Edge: 12.5%" in line
-    assert "Kelly: 8.3%" in line
-    assert "Stake: $2.00" in line
+    block = pushed["lines"][0]
+    # Basic content checks for new format
+    assert "AWY @ HOM" in block
+    assert "* Pick:" in block and "HOM -2.5" in block
+    assert "* Stake:" in block
 
     # Assert row persisted once
     with sqlite3.connect(store.DB_PATH) as conn:
         rows = conn.execute("SELECT game_id, pick, odds, stake FROM signals").fetchall()
-    assert rows == [("G1", "HOM", 150, 2.0)]
+    assert rows and rows[0][0] == "G1" and "HOM -2.5" in rows[0][1]

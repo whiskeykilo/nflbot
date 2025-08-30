@@ -14,6 +14,7 @@ class DummyResponse:
     def __init__(self, data, status_code: int = 200):
         self._data = data
         self.status_code = status_code
+        self.headers = {}
 
     def raise_for_status(self):
         if self.status_code != 200:
@@ -25,7 +26,7 @@ class DummyResponse:
 
 def test_reference_probs_from_external(monkeypatch):
     games = [
-        {"game_id": "G1", "home": "H", "away": "A", "odds_home": -500, "odds_away": 400}
+        {"game_id": "G1", "home": "H", "away": "A"}
     ]
 
     external = [
@@ -38,10 +39,10 @@ def test_reference_probs_from_external(monkeypatch):
                     "key": "pinnacle",
                     "markets": [
                         {
-                            "key": "h2h",
+                            "key": "spreads",
                             "outcomes": [
-                                {"name": "H", "price": -120},
-                                {"name": "A", "price": 110},
+                                {"name": "H", "price": -120, "point": -2.5},
+                                {"name": "A", "price": 110, "point": 2.5},
                             ],
                         }
                     ],
@@ -58,13 +59,14 @@ def test_reference_probs_from_external(monkeypatch):
     probs = reference_probs_for(games)
 
     assert "G1" in probs
+    # At -2.5 the de-vig fair probs should match the ratio of quoted probs
     assert pytest.approx(probs["G1"]["p_home"], 0.0001) == 0.5338983050847457
     assert pytest.approx(probs["G1"]["p_away"], 0.0001) == 0.4661016949152542
 
 
 def test_reference_probs_raises_on_external_failure(monkeypatch):
     games = [
-        {"game_id": "G1", "home": "H", "away": "A", "odds_home": -110, "odds_away": 100}
+        {"game_id": "G1", "home": "H", "away": "A"}
     ]
 
     def fake_get(url, params=None, timeout=0):

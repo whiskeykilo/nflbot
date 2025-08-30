@@ -34,10 +34,10 @@ def test_fetch_hr_nfl_moneylines_parses_response_and_skips_past_games():
                     "key": "hardrock",
                     "markets": [
                         {
-                            "key": "h2h",
+                            "key": "spreads",
                             "outcomes": [
-                                {"name": "JAX", "price": -110},
-                                {"name": "MIA", "price": 100},
+                                {"name": "JAX", "price": -110, "point": -2.5},
+                                {"name": "MIA", "price": 100, "point": 2.5},
                             ],
                         }
                     ],
@@ -54,7 +54,7 @@ def test_fetch_hr_nfl_moneylines_parses_response_and_skips_past_games():
     ]
 
     with patch("app.adapters.hardrock_odds.requests.get", return_value=_mock_response(sample)):
-        games = fetch_hr_nfl_moneylines()
+        games = fetch_hr_nfl_moneylines(days_from=36500)
 
     assert games == [
         {
@@ -62,9 +62,11 @@ def test_fetch_hr_nfl_moneylines_parses_response_and_skips_past_games():
             "home": "JAX",
             "away": "MIA",
             "start_utc": "2099-09-07T17:00:00Z",
-            "market": "ML",
+            "market": "SPREAD",
             "odds_home": -110,
             "odds_away": 100,
+            "line_home": -2.5,
+            "line_away": 2.5,
         }
     ]
 
@@ -95,4 +97,3 @@ def test_fetch_hr_nfl_moneylines_timeout():
     with patch("app.adapters.hardrock_odds.requests.get", side_effect=requests.Timeout):
         with pytest.raises(RuntimeError):
             fetch_hr_nfl_moneylines()
-
