@@ -28,4 +28,12 @@ Runs every day at `WEEKDAY_RUN_TIME` and an additional run on Sundays at
 
 ```bash
 docker build -t nflbot:3.12 .
+```
 
+### 2. Configure the Discord webhook
+
+Set `DISCORD_WEBHOOK_URL` to a Discord webhook before running the bot:
+
+```bash
+export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
+```
