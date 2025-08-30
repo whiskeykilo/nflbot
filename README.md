@@ -27,10 +27,12 @@ By default the bot installs an optimized weekly schedule (~248 polls/month) focu
 - Saturday limits rise: 4 polls 18:00–23:30
 
 Behavior:
+
 - Five‑Sunday months: buckets scale ~20% down automatically.
 - Banking: if the Hard Rock board hasn’t moved since the last sample, skip the next scheduled poll to preserve budget.
 
 Controls:
+
 - `USE_OPT_SCHEDULE=0` switches to a simple legacy schedule with `WEEKDAY_RUN_TIME` and `SUNDAY_RUN_TIME`.
 
 ---
@@ -51,6 +53,7 @@ Then run it as shown below in Step 4, replacing the image name with
 `ghcr.io/<owner>/<repo>:<tag>` (e.g., `latest` or a version tag).
 
 Notes:
+
 - Repositories are published to GHCR by the workflow on pushes to `main` and tags `v*.*.*`.
 - If the package is private, authenticate first: `echo $GITHUB_TOKEN | docker login ghcr.io -u <your-username> --password-stdin`.
 
@@ -111,6 +114,7 @@ cron or compose setup. Logs print to stdout.
 - `RUN_ONCE`: If truthy, runs once and exits.
 
 Notes:
+
 - Dynamic EV thresholding raises the bar to 1.5–2.0% in riskier mappings (whole numbers or interpolations near 3/7).
 - Signals are de‑duplicated in SQLite via a unique key.
 
@@ -143,5 +147,6 @@ for the same side will not create duplicate rows.
 - Tests: `pytest -q`
 
 Notes:
+
 - Quota handling: if The Odds API returns 402/429 or equivalent, the run exits early and posts a concise “Quota” message to Discord (if configured).
 - Logging includes a brief per‑game note when EV is unavailable due to insufficient Pinnacle alt lines within `MAX_INTERP_GAP`.
