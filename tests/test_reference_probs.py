@@ -62,7 +62,7 @@ def test_reference_probs_from_external(monkeypatch):
     assert pytest.approx(probs["G1"]["p_away"], 0.0001) == 0.4661016949152542
 
 
-def test_reference_probs_fallback(monkeypatch):
+def test_reference_probs_raises_on_external_failure(monkeypatch):
     games = [
         {"game_id": "G1", "home": "H", "away": "A", "odds_home": -110, "odds_away": 100}
     ]
@@ -72,9 +72,5 @@ def test_reference_probs_fallback(monkeypatch):
 
     monkeypatch.setattr(requests, "get", fake_get)
 
-    probs = reference_probs_for(games)
-
-    assert "G1" in probs
-    assert pytest.approx(probs["G1"]["p_home"], 0.0001) == 0.5116279069767442
-    assert pytest.approx(probs["G1"]["p_away"], 0.0001) == 0.48837209302325585
-
+    with pytest.raises(RuntimeError):
+        reference_probs_for(games)

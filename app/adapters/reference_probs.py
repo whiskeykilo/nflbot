@@ -1,14 +1,12 @@
 """Reference probabilities from a sharp source (Pinnacle via The Odds API).
 
-This module attempts to pull market-implied probabilities from a consensus
-source.  We query The Odds API for Pinnacle moneyline odds and then remove the
-vig to obtain a "true" probability for each side.  If the external data source
-is unavailable or does not contain a given game, we fall back to deriving the
-probabilities directly from the odds supplied with each game.
+This module pulls market-implied probabilities from Pinnacle moneyline odds and
+then removes the vig to obtain a "true" probability for each side. Fallback to
+local odds is intentionally disabled: if Pinnacle data cannot be retrieved, the
+caller should abort the run.
 
-The external request requires an API key in the environment variable
-``THEODDSAPI``.  Missing keys, network issues or unexpected payloads all
-trigger the local fallback behaviour.
+Requires an API key in the environment variable ``THEODDSAPI``. Missing keys or
+request failures raise ``RuntimeError`` so the caller can notify and stop.
 """
 
 from __future__ import annotations
@@ -90,13 +88,13 @@ def reference_probs_for(games: List[Dict]) -> Dict[str, Dict[str, float]]:
     api_key = os.getenv("THEODDSAPI")
     if api_key:
         params["apiKey"] = api_key
-
-    try:  # Best effort to fetch external data
-        resp = requests.get(ODDS_API_URL, params=params, timeout=3)
+    # Require external reference prices; raise on failure so caller can abort
+    try:
+        resp = requests.get(ODDS_API_URL, params=params, timeout=5)
         resp.raise_for_status()
         data = resp.json()
-    except Exception:
-        data = None
+    except Exception as exc:
+        raise RuntimeError("Failed to fetch Pinnacle reference probabilities") from exc
 
     index = {e.get("id"): e for e in data or []}
 
@@ -106,13 +104,7 @@ def reference_probs_for(games: List[Dict]) -> Dict[str, Dict[str, float]]:
         if rid in index:
             ref = _from_external(rid, index[rid])
 
-        if not ref:  # fall back to odds bundled with the game
-            p_h = american_to_implied_prob(g["odds_home"])
-            p_a = american_to_implied_prob(g["odds_away"])
-            p_h, p_a = _devig(p_h, p_a)
-            ref = {"p_home": p_h, "p_away": p_a}
-
-        out[rid] = ref
+        if ref:
+            out[rid] = ref
 
     return out
-
