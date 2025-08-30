@@ -285,8 +285,12 @@ def run_once():
         logger.info("No +EV opportunities found above threshold")
         # Allow testing Discord notifications even when no picks are available
         test_notify = os.getenv("TEST_NOTIFY", "").strip() not in ("", "0", "false", "False")
+        # If invoked in RUN_ONCE mode, also post a concise empty message to Discord
+        run_once_flag = os.getenv("RUN_ONCE", "").strip() not in ("", "0", "false", "False")
         if test_notify:
             push(TITLE + " - Test", ["No +EV opportunities found above threshold."])
+        elif run_once_flag:
+            push(TITLE, ["No +EV opportunities found above threshold."])
         return
     alerts.sort(key=lambda a:a["edge"], reverse=True)
     lines=[]
