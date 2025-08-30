@@ -1,10 +1,12 @@
-import os, time, schedule
+import os, time, schedule, logging
 from datetime import datetime, timezone
 from app.adapters.hardrock_odds import fetch_hr_nfl_moneylines
 from app.adapters.reference_probs import reference_probs_for
 from app.core.ev import expected_value_per_dollar, kelly_fraction
 from app.core.store import save_signal
 from app.core.notify import push
+
+logger = logging.getLogger(__name__)
 
 BANKROLL   = float(os.getenv("BANKROLL","500"))
 MIN_EDGE   = float(os.getenv("MIN_EDGE","0.03"))
@@ -19,8 +21,16 @@ WEEKDAY_RUN_TIME = os.getenv("WEEKDAY_RUN_TIME", "09:00")
 def clamp(x, lo, hi): return max(lo, min(hi, x))
 
 def run_once():
-    games = fetch_hr_nfl_moneylines()
-    ref   = reference_probs_for(games)
+    try:
+        games = fetch_hr_nfl_moneylines()
+    except Exception:
+        logger.exception("Failed to fetch Hard Rock NFL moneylines")
+        return
+    try:
+        ref   = reference_probs_for(games)
+    except Exception:
+        logger.exception("Failed to fetch reference probabilities")
+        return
     alerts=[]
     for g in games:
         rid=g["game_id"]; pr=ref.get(rid)
