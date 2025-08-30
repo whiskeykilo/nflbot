@@ -1,4 +1,4 @@
-"""HTTP client for fetching NFL moneyline odds from Hard Rock.
+"""HTTP client for fetching NFL spread (point) lines from Hard Rock.
 
 The Hard Rock sportsbook does not provide an officially documented public
 API, but their odds are available through third party aggregators such as
@@ -15,9 +15,11 @@ Only the fields required by :mod:`app.main` are exposed:
 ``start_utc``
     Kick off time as an ISO8601 string in UTC.
 ``market``
-    Market identifier – we only fetch moneyline (ML) markets.
+    Market identifier – we fetch point spreads.
 ``odds_home`` / ``odds_away``
-    American odds for each side of the moneyline.
+    American odds for each side against the spread.
+``line_home`` / ``line_away``
+    The spread (handicap) in points for each team.
 
 The function performs basic error handling and will raise ``RuntimeError``
 with a meaningful message if the request fails or returns malformed JSON.
@@ -26,11 +28,13 @@ with a meaningful message if the request fails or returns malformed JSON.
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
-from typing import List, Dict
+from datetime import datetime, timezone, timedelta
+import logging
+from typing import List, Dict, Optional
 
 import requests
 from dateutil import parser as dateparser
+from app.core.errors import OddsApiQuotaError
 
 # In production you would likely pull an API key from the environment and use
 # the official Hard Rock endpoint. For the purposes of this repository we use
@@ -42,11 +46,19 @@ API_URL = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds"
 # ``apiKey`` are added at request time.
 DEFAULT_PARAMS = {
     "regions": "us",
-    "markets": "h2h",
-    "bookmakers": "hardrock",
+    "markets": "spreads",
+    "bookmakers": "hardrockbet,hardrock",
     "oddsFormat": "american",
     "dateFormat": "iso",
 }
+
+BM_KEYS = ("hardrockbet", "hardrock")
+
+def _to_int(x: Optional[int]) -> Optional[int]:
+    try:
+        return int(x) if x is not None else None
+    except Exception:
+        return None
 
 
 def _to_utc(dt_str: str) -> datetime:
@@ -58,8 +70,21 @@ def _to_utc(dt_str: str) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
-def fetch_hr_nfl_moneylines(timeout: float = 10.0, days_from: int = 1) -> List[Dict]:
-    """Retrieve live NFL moneyline odds from Hard Rock.
+def _check_quota_or_raise(resp: requests.Response) -> None:
+    # Raise specific error on common quota/rate limit statuses
+    if resp.status_code in (402, 429):
+        raise OddsApiQuotaError(f"The Odds API quota/rate limit hit (HTTP {resp.status_code})")
+    # On success, emit warning if headers indicate zero remaining
+    try:
+        remaining = resp.headers.get("x-requests-remaining") or resp.headers.get("X-Requests-Remaining")
+        if remaining is not None and str(remaining).isdigit() and int(remaining) <= 0:
+            logging.getLogger(__name__).warning("The Odds API requests remaining is 0; further calls may fail")
+    except Exception:
+        pass
+
+
+def fetch_hr_nfl_moneylines(timeout: float = 10.0, days_from: int = 7) -> List[Dict]:
+    """Retrieve live NFL spread lines from Hard Rock.
 
     Parameters
     ----------
@@ -86,13 +111,21 @@ def fetch_hr_nfl_moneylines(timeout: float = 10.0, days_from: int = 1) -> List[D
 
     try:
         resp = requests.get(API_URL, params=params, timeout=timeout)
+        _check_quota_or_raise(resp)
         resp.raise_for_status()
     except requests.Timeout as exc:
         raise RuntimeError("Timeout fetching Hard Rock odds") from exc
     except requests.HTTPError as exc:  # pragma: no cover - branch tested
         status = exc.response.status_code if exc.response else "unknown"
+        # Surface quota errors distinctly
+        if isinstance(status, int) and status in (402, 429):
+            raise OddsApiQuotaError(f"The Odds API quota/rate limit hit (HTTP {status})") from exc
         raise RuntimeError(f"HTTP {status} fetching Hard Rock odds") from exc
     except requests.RequestException as exc:  # pragma: no cover - branch tested
+        # Try to detect quota error from body text
+        msg = str(exc)
+        if any(k in msg.lower() for k in ("no_active_plan", "insufficient", "quota", "rate limit")):
+            raise OddsApiQuotaError("The Odds API quota/rate limit hit") from exc
         raise RuntimeError(f"Error fetching Hard Rock odds: {exc}") from exc
 
     try:
@@ -101,6 +134,7 @@ def fetch_hr_nfl_moneylines(timeout: float = 10.0, days_from: int = 1) -> List[D
         raise RuntimeError("Invalid JSON from Hard Rock odds endpoint") from exc
 
     now = datetime.now(timezone.utc)
+    cutoff = now + timedelta(days=max(1, int(days_from)))
     games: List[Dict] = []
 
     for event in events:
@@ -113,18 +147,39 @@ def fetch_hr_nfl_moneylines(timeout: float = 10.0, days_from: int = 1) -> List[D
 
         game_id = event.get("id")
         home_team = event.get("home_team")
-        teams = event.get("teams", [])
-        away_team = next((t for t in teams if t != home_team), None)
+        # Prefer explicit away_team if provided by API, otherwise infer from "teams"
+        away_team = event.get("away_team")
+        if not away_team:
+            teams = event.get("teams", [])
+            away_team = next((t for t in teams if t != home_team), None)
+
+        # Ignore games outside the cutoff window (focus on current week)
+        if start_dt > cutoff:
+            continue
 
         odds_home = odds_away = None
+        line_home = line_away = None
         bookmakers = event.get("bookmakers", [])
         if bookmakers:
-            markets = bookmakers[0].get("markets", [])
-            market = next((m for m in markets if m.get("key") == "h2h"), None)
+            bm = None
+            for key in BM_KEYS:
+                bm = next((b for b in bookmakers if b.get("key") == key), None)
+                if bm:
+                    break
+            if bm is None:
+                bm = bookmakers[0]
+            markets = bm.get("markets", [])
+            market = next((m for m in markets if m.get("key") == "spreads"), None)
             if market:
-                outcomes = {o["name"]: o["price"] for o in market.get("outcomes", [])}
-                odds_home = outcomes.get(home_team)
-                odds_away = outcomes.get(away_team)
+                outcomes = {o.get("name"): o for o in market.get("outcomes", [])}
+                if home_team is not None and home_team in outcomes:
+                    oh = outcomes[home_team]
+                    odds_home = _to_int(oh.get("price"))
+                    line_home = oh.get("point")
+                if away_team is not None and away_team in outcomes:
+                    oa = outcomes[away_team]
+                    odds_away = _to_int(oa.get("price"))
+                    line_away = oa.get("point")
 
         games.append(
             {
@@ -132,12 +187,13 @@ def fetch_hr_nfl_moneylines(timeout: float = 10.0, days_from: int = 1) -> List[D
                 "home": home_team,
                 "away": away_team,
                 "start_utc": start_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "market": "ML",
+                "market": "SPREAD",
                 "odds_home": odds_home,
                 "odds_away": odds_away,
+                "line_home": line_home,
+                "line_away": line_away,
             }
         )
 
     games.sort(key=lambda g: g["start_utc"])  # deterministic ordering for cron jobs
     return games
-
