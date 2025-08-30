@@ -37,7 +37,24 @@ Controls:
 
 ## Quick Start
 
-### 1. Build the image
+### 1. Use the prebuilt GHCR image (recommended)
+
+Pull the image published by GitHub Actions to GitHub Container Registry (GHCR).
+
+```bash
+docker pull ghcr.io/<owner>/<repo>:latest
+# Example if your repo is github.com/acme/nflbot
+# docker pull ghcr.io/acme/nflbot:latest
+```
+
+Then run it as shown below in Step 4, replacing the image name with
+`ghcr.io/<owner>/<repo>:<tag>` (e.g., `latest` or a version tag).
+
+Notes:
+- Repositories are published to GHCR by the workflow on pushes to `main` and tags `v*.*.*`.
+- If the package is private, authenticate first: `echo $GITHUB_TOKEN | docker login ghcr.io -u <your-username> --password-stdin`.
+
+### Or, build the image locally
 
 ```bash
 docker build -t nflbot:0.1.0 .

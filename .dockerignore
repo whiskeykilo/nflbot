@@ -1,0 +1,25 @@
+# VCS and CI
+.git
+.github
+
+# Python
+__pycache__
+*.pyc
+.pytest_cache
+.venv
+venv
+
+# Editors/IDE
+.vscode
+.idea
+
+# Project extras not needed in image
+tests
+TODO.md
+CHANGELOG.md
+README.md
+LICENSE
+
+# Docker
+Dockerfile*
+.dockerignore
