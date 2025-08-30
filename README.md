@@ -12,7 +12,13 @@ flags +EV bets, and pushes them to Discord for human review.
 - Calculate expected value (+EV), Kelly fraction, and recommended stake.
 - Persist signals to a local SQLite ledger (`/data/bets.sqlite`).
 - Schedule internally (via `schedule` lib) — no host cron or docker-compose needed.
+  Configure run times with `SUNDAY_RUN_TIME` and `WEEKDAY_RUN_TIME` env vars.
 - Push alerts to a Discord channel using a webhook.
+
+## Scheduling
+
+Runs every day at `WEEKDAY_RUN_TIME` and an additional run on Sundays at
+`SUNDAY_RUN_TIME`. Times use 24h `HH:MM` format.
 
 ---
 
@@ -31,4 +37,3 @@ Set `DISCORD_WEBHOOK_URL` to a Discord webhook before running the bot:
 ```bash
 export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
 ```
-
