@@ -140,4 +140,3 @@ def fetch_hr_nfl_moneylines(timeout: float = 10.0, days_from: int = 1) -> List[D
 
     games.sort(key=lambda g: g["start_utc"])  # deterministic ordering for cron jobs
     return games
-

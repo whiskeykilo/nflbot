@@ -21,9 +21,7 @@ import requests
 from app.core.ev import american_to_implied_prob
 
 
-ODDS_API_URL = (
-    "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds"
-)
+ODDS_API_URL = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds"
 BOOKMAKER = "pinnacle"
 
 
@@ -115,4 +113,3 @@ def reference_probs_for(games: List[Dict]) -> Dict[str, Dict[str, float]]:
         out[rid] = ref
 
     return out
-
