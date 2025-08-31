@@ -36,8 +36,16 @@ def test_fetch_hr_nfl_moneylines_parses_response_and_skips_past_games():
                         {
                             "key": "spreads",
                             "outcomes": [
-                                {"name": "JAX", "price": -110, "point": -2.5},
-                                {"name": "MIA", "price": 100, "point": 2.5},
+        {"name": "JAX", "price": -110, "point": -2.5},
+        {"name": "MIA", "price": 100, "point": 2.5},
+                            ],
+                        }
+                        ,
+                        {
+                            "key": "h2h",
+                            "outcomes": [
+                                {"name": "JAX", "price": -130},
+                                {"name": "MIA", "price": 120},
                             ],
                         }
                     ],
@@ -62,11 +70,13 @@ def test_fetch_hr_nfl_moneylines_parses_response_and_skips_past_games():
             "home": "JAX",
             "away": "MIA",
             "start_utc": "2099-09-07T17:00:00Z",
-            "market": "SPREAD",
+            "market": "BOTH",
             "odds_home": -110,
             "odds_away": 100,
             "line_home": -2.5,
             "line_away": 2.5,
+            "ml_home": -130,
+            "ml_away": 120,
         }
     ]
 

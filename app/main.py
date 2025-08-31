@@ -19,6 +19,7 @@ _SKIP_NEXT: bool = False
 
 BANKROLL        = float(os.getenv("BANKROLL","500"))
 MIN_EDGE        = float(os.getenv("MIN_EDGE","0.01"))
+MIN_EDGE_ML     = float(os.getenv("MIN_EDGE_ML","0.007"))
 KELLY_FRAC      = float(os.getenv("KELLY_FRACTION","0.5"))
 MAX_UNIT        = float(os.getenv("MAX_UNIT","0.02"))
 MAX_DAYS_AHEAD  = int(os.getenv("MAX_DAYS_AHEAD", "7"))
@@ -37,7 +38,12 @@ def _hr_signature(games: list[dict]) -> str:
     try:
         items = []
         for g in games:
-            items.append((g.get("game_id"), g.get("line_home"), g.get("line_away"), g.get("odds_home"), g.get("odds_away")))
+            items.append((
+                g.get("game_id"),
+                g.get("line_home"), g.get("line_away"),
+                g.get("odds_home"), g.get("odds_away"),
+                g.get("ml_home"), g.get("ml_away"),
+            ))
         items.sort()
         return str(items)
     except Exception:
@@ -54,10 +60,10 @@ def run_once():
         ])
         return
     except Exception:
-        logger.exception("Failed to fetch Hard Rock NFL spreads")
-        push(TITLE + " - Error", ["Failed to fetch Hard Rock NFL spreads; aborting."])
+        logger.exception("Failed to fetch Hard Rock NFL odds")
+        push(TITLE + " - Error", ["Failed to fetch Hard Rock NFL odds; aborting."])
         return
-    logger.info("Fetched %d upcoming games from Hard Rock (spreads)", len(games))
+    logger.info("Fetched %d upcoming games from Hard Rock (spreads & MLs)", len(games))
     # Change detection: bank next poll if nothing moved
     global _LAST_SIG, _SKIP_NEXT
     sig = _hr_signature(games)
@@ -144,8 +150,13 @@ def run_once():
         prices = (pr or {}).get("prices", {})
         prices_h = prices.get("home", {})
         prices_a = prices.get("away", {})
+        ml_ref = (pr or {}).get("ml", {})
+        ml_ref_prices = ml_ref.get("prices", {})
+        ml_ph = ml_ref.get("home")
+        ml_pa = ml_ref.get("away")
 
         ev_h = ev_a = None
+        ev_mlh = ev_mla = None
         skip_parts = []
         if oh is not None and lh is not None and fav_ladder:
             mp = map_probs("home", float(lh), fav_ladder, MAX_INTERP_GAP)
@@ -162,6 +173,13 @@ def run_once():
             else:
                 skip_parts.append(f"A {float(la):+0.1f}")
 
+        mlh = g.get("ml_home")
+        mla = g.get("ml_away")
+        if mlh is not None and ml_ph is not None:
+            ev_mlh = expected_value_per_dollar(ml_ph, mlh, 0.0)
+        if mla is not None and ml_pa is not None:
+            ev_mla = expected_value_per_dollar(ml_pa, mla, 0.0)
+
         # Choose nearest Pinnacle display prices to HR lines for log context
         def nearest_price(pr_map:Dict[float,int], target:float):
             if not pr_map:
@@ -171,6 +189,8 @@ def run_once():
 
         ph, ph_line = (nearest_price(prices_h, float(lh)) if lh is not None else (None, None))
         pa, pa_line = (nearest_price(prices_a, float(la)) if la is not None else (None, None))
+        mph = ml_ref_prices.get("home") if ml_ref_prices else None
+        mpa = ml_ref_prices.get("away") if ml_ref_prices else None
 
         # Log even if EV not available, but keep concise
         logger.info(
@@ -182,6 +202,14 @@ def run_once():
             (pa if pa is not None else "-"), (f"{pa_line:+.1f}" if pa_line is not None else "-"),
             (" | EV " + " ".join(filter(None,[f"H {ev_h*100:+.1f}%" if ev_h is not None else None, f"A {ev_a*100:+.1f}%" if ev_a is not None else None]))) if (ev_h is not None or ev_a is not None) else "",
         )
+        if mlh is not None or mla is not None:
+            logger.info(
+                "%s @ %s - %s | HR ML: H %s A %s | P ML: H %s A %s%s",
+                abbr(g.get("away","")), abbr(g.get("home","")), g.get("start_utc"),
+                mlh if mlh is not None else "-", mla if mla is not None else "-",
+                mph if mph is not None else "-", mpa if mpa is not None else "-",
+                (" | EV " + " ".join(filter(None,[f"H {ev_mlh*100:+.1f}%" if ev_mlh is not None else None, f"A {ev_mla*100:+.1f}%" if ev_mla is not None else None]))) if (ev_mlh is not None or ev_mla is not None) else "",
+            )
         if skip_parts:
             logger.debug(
                 "EV unavailable (no nearby Pinnacle alt lines <= %.2f): %s @ %s — %s",
@@ -199,6 +227,7 @@ def run_once():
         rid=g["game_id"]; pr=ref.get(rid)
         if not pr: continue
         fav_ladder = (pr or {}).get("fav_ladder", {})
+        # ----- Spreads -----
         evals=[]
         for side in ("home","away"):
             odds=g.get(f"odds_{side}")
@@ -223,18 +252,40 @@ def run_once():
             if meta.get("interpolated") and near_key:
                 thr = max(thr, 0.02)
             evals.append((ev,side,odds,p_win,k,stake,line,p_push,thr))
-        if not evals:
-            continue  # no valid odds for this game
-        ev,side,odds,p_true,k,stake,line,p_push,thr=max(evals,key=lambda x:x[0])
-        if ev>=thr and stake>=1.0:
-            team=g["home"] if side=="home" else g["away"]
-            pick=f"{team} {line:+.1f}"
-            p_be = break_even_prob(odds, p_push)
-            a={"game_id":rid,"market":g["market"],"pick":pick,"odds":odds,
-               "p_true":p_true,"p_be":p_be,"p_push":p_push,
-               "edge":ev,"kelly":k,"stake":stake,
-               "event":f"{g['away']} @ {g['home']}","start":g["start_utc"]}
-            alerts.append(a)
+        if evals:
+            ev,side,odds,p_true,k,stake,line,p_push,thr=max(evals,key=lambda x:x[0])
+            if ev>=thr and stake>=1.0:
+                team=g["home"] if side=="home" else g["away"]
+                pick=f"{team} {line:+.1f}"
+                p_be = break_even_prob(odds, p_push)
+                a={"game_id":rid,"market":"SPREAD","pick":pick,"odds":odds,
+                   "p_true":p_true,"p_be":p_be,"p_push":p_push,
+                   "edge":ev,"kelly":k,"stake":stake,
+                   "event":f"{g['away']} @ {g['home']}","start":g["start_utc"]}
+                alerts.append(a)
+        # ----- Moneylines -----
+        ml = (pr or {}).get("ml", {})
+        ml_evals=[]
+        for side in ("home","away"):
+            odds = g.get(f"ml_{side}")
+            p_true = ml.get(side)
+            if odds is None or p_true is None:
+                continue
+            ev = expected_value_per_dollar(p_true, odds, 0.0)
+            k = kelly_fraction(p_true, odds, 0.0)
+            stake = round(BANKROLL*clamp(KELLY_FRAC*max(0,k),0.0,MAX_UNIT),2)
+            ml_evals.append((ev, side, odds, p_true, k, stake))
+        if ml_evals:
+            ev, side, odds, p_true, k, stake = max(ml_evals, key=lambda x:x[0])
+            if ev >= MIN_EDGE_ML and stake >= 1.0:
+                team = g["home"] if side == "home" else g["away"]
+                pick = f"{team} ML"
+                p_be = break_even_prob(odds, 0.0)
+                a={"game_id":rid,"market":"ML","pick":pick,"odds":odds,
+                   "p_true":p_true,"p_be":p_be,"p_push":0.0,
+                   "edge":ev,"kelly":k,"stake":stake,
+                   "event":f"{g['away']} @ {g['home']}","start":g["start_utc"]}
+                alerts.append(a)
 
     forced = False
     if not alerts and TEST_FORCE_OPPS:
@@ -265,12 +316,37 @@ def run_once():
                 p_be = break_even_prob(odds, p_push)
                 candidates.append({
                     "game_id": rid,
-                    "market": g["market"],
+                    "market": "SPREAD",
                     "pick": f"{g['home'] if side=='home' else g['away']} {line:+.1f}",
                     "odds": odds,
                     "p_true": p_win,
                     "p_be": p_be,
                     "p_push": p_push,
+                    "edge": ev,
+                    "kelly": k,
+                    "stake": stake,
+                    "event": f"{g['away']} @ {g['home']}",
+                    "start": g["start_utc"],
+                })
+            ml = (pr or {}).get("ml", {})
+            for side in ("home","away"):
+                odds = g.get(f"ml_{side}")
+                p_true = ml.get(side)
+                if odds is None or p_true is None:
+                    continue
+                ev = expected_value_per_dollar(p_true, odds, 0.0)
+                k = kelly_fraction(p_true, odds, 0.0)
+                stake = round(BANKROLL*clamp(KELLY_FRAC*max(0,k),0.0,MAX_UNIT),2)
+                stake = max(1.0, stake)
+                p_be = break_even_prob(odds, 0.0)
+                candidates.append({
+                    "game_id": rid,
+                    "market": "ML",
+                    "pick": f"{g['home'] if side=='home' else g['away']} ML",
+                    "odds": odds,
+                    "p_true": p_true,
+                    "p_be": p_be,
+                    "p_push": 0.0,
                     "edge": ev,
                     "kelly": k,
                     "stake": stake,
