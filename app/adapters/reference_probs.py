@@ -1,10 +1,9 @@
 """Reference probabilities from a sharp source (Pinnacle via The Odds API).
 
-This module pulls market-implied probabilities from Pinnacle spread (ATS) odds and
-then removes the vig to obtain a "true" probability for each side at Pinnacle's
-posted spread. Fallback to
-local odds is intentionally disabled: if Pinnacle data cannot be retrieved, the
-caller should abort the run.
+This module pulls market-implied probabilities from Pinnacle spread (ATS) and
+moneyline odds and then removes the vig to obtain "true" probabilities. Fallback
+to local odds is intentionally disabled: if Pinnacle data cannot be retrieved,
+the caller should abort the run.
 
 Requires an API key in the environment variable ``THEODDSAPI``. Missing keys or
 request failures raise ``RuntimeError`` so the caller can notify and stop.
@@ -108,57 +107,86 @@ def _from_external(game_id: str, event: dict) -> dict | None:
         ladder_away: Dict[float, float] = {}
         prices_home: Dict[float, int] = {}
         prices_away: Dict[float, int] = {}
+        ml_home_prob: Optional[float] = None
+        ml_away_prob: Optional[float] = None
+        ml_price_home: Optional[int] = None
+        ml_price_away: Optional[int] = None
         # Some APIs provide multiple "spreads" entries for alternate lines
         for m in bm.get("markets", []):
-            if m.get("key") != "spreads":
-                continue
+            key = m.get("key")
             outs = m.get("outcomes", [])
-            price_home: Optional[int] = None
-            price_away: Optional[int] = None
-            line_home: Optional[float] = None
-            line_away: Optional[float] = None
-            for o in outs:
-                if o.get("name") == event.get("home_team"):
-                    price_home = _to_int(o.get("price"))
-                    line_home = o.get("point")
-                elif o.get("name") == event.get("away_team"):
-                    price_away = _to_int(o.get("price"))
-                    line_away = o.get("point")
-            if price_home is None or price_away is None:
-                continue
-            p_h = american_to_implied_prob(price_home)
-            p_a = american_to_implied_prob(price_away)
-            p_h, p_a = _devig(p_h, p_a)
-            if line_home is not None:
-                try:
-                    ladder_home[float(line_home)] = p_h
-                    if price_home is not None:
-                        prices_home[float(line_home)] = int(price_home)
-                except Exception:
-                    pass
-            if line_away is not None:
-                try:
-                    ladder_away[float(line_away)] = p_a
-                    if price_away is not None:
-                        prices_away[float(line_away)] = int(price_away)
-                except Exception:
-                    pass
-        if not ladder_home or not ladder_away:
-            return None
-        # Pick a representative line near 0 for convenience in logs
-        def _closest_line(d: Dict[float, float]) -> float:
-            return sorted(d.keys(), key=lambda x: abs(x))[0]
-        ch = _closest_line(ladder_home)
-        ca = _closest_line(ladder_away)
-        return {
-            "p_home": ladder_home[ch],
-            "p_away": ladder_away[ca],
-            "line_home": ch,
-            "line_away": ca,
+            if key == "spreads":
+                price_home: Optional[int] = None
+                price_away: Optional[int] = None
+                line_home: Optional[float] = None
+                line_away: Optional[float] = None
+                for o in outs:
+                    if o.get("name") == event.get("home_team"):
+                        price_home = _to_int(o.get("price"))
+                        line_home = o.get("point")
+                    elif o.get("name") == event.get("away_team"):
+                        price_away = _to_int(o.get("price"))
+                        line_away = o.get("point")
+                if price_home is None or price_away is None:
+                    continue
+                p_h = american_to_implied_prob(price_home)
+                p_a = american_to_implied_prob(price_away)
+                p_h, p_a = _devig(p_h, p_a)
+                if line_home is not None:
+                    try:
+                        ladder_home[float(line_home)] = p_h
+                        if price_home is not None:
+                            prices_home[float(line_home)] = int(price_home)
+                    except Exception:
+                        pass
+                if line_away is not None:
+                    try:
+                        ladder_away[float(line_away)] = p_a
+                        if price_away is not None:
+                            prices_away[float(line_away)] = int(price_away)
+                    except Exception:
+                        pass
+            elif key == "h2h":
+                price_home = price_away = None
+                for o in outs:
+                    if o.get("name") == event.get("home_team"):
+                        price_home = _to_int(o.get("price"))
+                    elif o.get("name") == event.get("away_team"):
+                        price_away = _to_int(o.get("price"))
+                if price_home is not None and price_away is not None:
+                    p_h = american_to_implied_prob(price_home)
+                    p_a = american_to_implied_prob(price_away)
+                    p_h, p_a = _devig(p_h, p_a)
+                    ml_home_prob = p_h
+                    ml_away_prob = p_a
+                    ml_price_home = price_home
+                    ml_price_away = price_away
+        # Pick a representative line near 0 for convenience in logs if spreads exist
+        result = {
             "ladder": {"home": ladder_home, "away": ladder_away},
             "prices": {"home": prices_home, "away": prices_away},
             "fav_ladder": fav_ladder,
         }
+        if ladder_home and ladder_away:
+            def _closest_line(d: Dict[float, float]) -> float:
+                return sorted(d.keys(), key=lambda x: abs(x))[0]
+            ch = _closest_line(ladder_home)
+            ca = _closest_line(ladder_away)
+            result.update({
+                "p_home": ladder_home[ch],
+                "p_away": ladder_away[ca],
+                "line_home": ch,
+                "line_away": ca,
+            })
+        if ml_home_prob is not None and ml_away_prob is not None:
+            result["ml"] = {
+                "home": ml_home_prob,
+                "away": ml_away_prob,
+                "prices": {"home": ml_price_home, "away": ml_price_away},
+            }
+        if not result.get("ladder")["home"] and "ml" not in result:
+            return None
+        return result
     except Exception:
         return None
 
@@ -176,7 +204,7 @@ def reference_probs_for(games: List[Dict]) -> Dict[str, Dict[str, float]]:
 
     data = None
     params = {
-        "markets": "spreads",
+        "markets": "spreads,h2h",
         "regions": "us",
         "bookmakers": BOOKMAKER,
         "oddsFormat": "american",

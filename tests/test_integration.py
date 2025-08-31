@@ -73,3 +73,45 @@ def test_integration_run_once_pushes_and_persists(monkeypatch, tmp_path):
     with sqlite3.connect(store.DB_PATH) as conn:
         rows = conn.execute("SELECT game_id, pick, odds, stake FROM signals").fetchall()
     assert rows and rows[0][0] == "G1" and "HOM -2.5" in rows[0][1]
+
+
+def test_integration_run_once_moneyline(monkeypatch, tmp_path):
+    store.DB_PATH = str(tmp_path / "signals_ml.sqlite")
+    games = [
+        {
+            "game_id": "G2",
+            "home": "HOM",
+            "away": "AWY",
+            "start_utc": "2099-09-07T17:00:00Z",
+            "market": "BOTH",
+            "odds_home": -120,
+            "odds_away": 110,
+            "line_home": -3.0,
+            "line_away": 3.0,
+            "ml_home": -105,
+            "ml_away": 105,
+        }
+    ]
+    monkeypatch.setattr(app_main, "fetch_hr_nfl_moneylines", lambda days_from=7: games)
+    ref = {
+        "G2": {
+            "fav_ladder": { -3.0: 0.5 },
+            "ladder": {"home": {-3.0: 0.5}, "away": {3.0: 0.5}},
+            "prices": {"home": {-3.0: -110}, "away": {3.0: -110}},
+            "ml": {"home": 0.55, "away": 0.45},
+        }
+    }
+    monkeypatch.setattr(app_main, "reference_probs_for", lambda gs: ref)
+    pushed = {}
+    monkeypatch.setattr(app_main, "push", lambda title, lines: pushed.update(title=title, lines=lines))
+    monkeypatch.setattr(app_main, "BANKROLL", 100.0)
+    monkeypatch.setattr(app_main, "MIN_EDGE", 0.01)
+    monkeypatch.setattr(app_main, "MIN_EDGE_ML", 0.01)
+    monkeypatch.setattr(app_main, "KELLY_FRAC", 0.5)
+    monkeypatch.setattr(app_main, "MAX_UNIT", 0.02)
+    monkeypatch.setattr(app_main, "MAX_INTERP_GAP", 2.0)
+    app_main.run_once()
+    assert pushed.get("lines") and "ML" in pushed["lines"][0]
+    with sqlite3.connect(store.DB_PATH) as conn:
+        rows = conn.execute("SELECT market, pick FROM signals").fetchall()
+    assert rows and rows[0][0] == "ML" and "HOM ML" in rows[0][1]

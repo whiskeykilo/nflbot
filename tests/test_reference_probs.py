@@ -44,7 +44,14 @@ def test_reference_probs_from_external(monkeypatch):
                                 {"name": "H", "price": -120, "point": -2.5},
                                 {"name": "A", "price": 110, "point": 2.5},
                             ],
-                        }
+                        },
+                        {
+                            "key": "h2h",
+                            "outcomes": [
+                                {"name": "H", "price": -150},
+                                {"name": "A", "price": 130},
+                            ],
+                        },
                     ],
                 }
             ],
@@ -62,6 +69,9 @@ def test_reference_probs_from_external(monkeypatch):
     # At -2.5 the de-vig fair probs should match the ratio of quoted probs
     assert pytest.approx(probs["G1"]["p_home"], 0.0001) == 0.5338983050847457
     assert pytest.approx(probs["G1"]["p_away"], 0.0001) == 0.4661016949152542
+    # Moneyline probabilities
+    assert pytest.approx(probs["G1"]["ml"]["home"], 0.0001) == 0.5798319327731092
+    assert pytest.approx(probs["G1"]["ml"]["away"], 0.0001) == 0.42016806722689076
 
 
 def test_reference_probs_raises_on_external_failure(monkeypatch):

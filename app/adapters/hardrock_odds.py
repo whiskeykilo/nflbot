@@ -1,4 +1,4 @@
-"""HTTP client for fetching NFL spread (point) lines from Hard Rock.
+"""HTTP client for fetching NFL spread and moneyline odds from Hard Rock.
 
 The Hard Rock sportsbook does not provide an officially documented public
 API, but their odds are available through third party aggregators such as
@@ -14,12 +14,12 @@ Only the fields required by :mod:`app.main` are exposed:
     Team abbreviations.
 ``start_utc``
     Kick off time as an ISO8601 string in UTC.
-``market``
-    Market identifier – we fetch point spreads.
 ``odds_home`` / ``odds_away``
     American odds for each side against the spread.
 ``line_home`` / ``line_away``
     The spread (handicap) in points for each team.
+``ml_home`` / ``ml_away``
+    American moneyline odds for each team.
 
 The function performs basic error handling and will raise ``RuntimeError``
 with a meaningful message if the request fails or returns malformed JSON.
@@ -46,7 +46,7 @@ API_URL = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds"
 # ``apiKey`` are added at request time.
 DEFAULT_PARAMS = {
     "regions": "us",
-    "markets": "spreads",
+    "markets": "spreads,h2h",
     "bookmakers": "hardrockbet,hardrock",
     "oddsFormat": "american",
     "dateFormat": "iso",
@@ -159,6 +159,7 @@ def fetch_hr_nfl_moneylines(timeout: float = 10.0, days_from: int = 7) -> List[D
 
         odds_home = odds_away = None
         line_home = line_away = None
+        ml_home = ml_away = None
         bookmakers = event.get("bookmakers", [])
         if bookmakers:
             bm = None
@@ -169,9 +170,9 @@ def fetch_hr_nfl_moneylines(timeout: float = 10.0, days_from: int = 7) -> List[D
             if bm is None:
                 bm = bookmakers[0]
             markets = bm.get("markets", [])
-            market = next((m for m in markets if m.get("key") == "spreads"), None)
-            if market:
-                outcomes = {o.get("name"): o for o in market.get("outcomes", [])}
+            market_spread = next((m for m in markets if m.get("key") == "spreads"), None)
+            if market_spread:
+                outcomes = {o.get("name"): o for o in market_spread.get("outcomes", [])}
                 if home_team is not None and home_team in outcomes:
                     oh = outcomes[home_team]
                     odds_home = _to_int(oh.get("price"))
@@ -180,6 +181,13 @@ def fetch_hr_nfl_moneylines(timeout: float = 10.0, days_from: int = 7) -> List[D
                     oa = outcomes[away_team]
                     odds_away = _to_int(oa.get("price"))
                     line_away = oa.get("point")
+            market_ml = next((m for m in markets if m.get("key") == "h2h"), None)
+            if market_ml:
+                outcomes = {o.get("name"): o for o in market_ml.get("outcomes", [])}
+                if home_team is not None and home_team in outcomes:
+                    ml_home = _to_int(outcomes[home_team].get("price"))
+                if away_team is not None and away_team in outcomes:
+                    ml_away = _to_int(outcomes[away_team].get("price"))
 
         games.append(
             {
@@ -187,11 +195,13 @@ def fetch_hr_nfl_moneylines(timeout: float = 10.0, days_from: int = 7) -> List[D
                 "home": home_team,
                 "away": away_team,
                 "start_utc": start_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "market": "SPREAD",
+                "market": "BOTH",
                 "odds_home": odds_home,
                 "odds_away": odds_away,
                 "line_home": line_home,
                 "line_away": line_away,
+                "ml_home": ml_home,
+                "ml_away": ml_away,
             }
         )
 
