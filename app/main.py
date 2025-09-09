@@ -385,7 +385,8 @@ def run_once():
         # Discord: minimal, readable, with emojis
         away, home = a['event'].split(' @ ')
         title_line = f"{abbr(away)} @ {abbr(home)} — {_fmt_kickoff_local(a['start'])} 👊 {a['edge']*100:+.1f}% EV"
-        pick_line = f"* Pick: {a['pick']} at {a['odds']}"
+        # Ensure American odds include a '+' sign for positive values
+        pick_line = f"* Pick: {a['pick']} at {a['odds']:+d}"
         stake_line = f"* Stake: ${a['stake']:.2f}"
         lines.append(f"\n{title_line}\n{pick_line}\n{stake_line}")
     logger.info("Pushing %d alert(s) to Discord%s", len(lines), " (test)" if forced else "")

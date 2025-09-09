@@ -115,3 +115,36 @@ def test_integration_run_once_moneyline(monkeypatch, tmp_path):
     with sqlite3.connect(store.DB_PATH) as conn:
         rows = conn.execute("SELECT market, pick FROM signals").fetchall()
     assert rows and rows[0][0] == "ML" and "HOM ML" in rows[0][1]
+
+
+def test_integration_positive_odds_format(monkeypatch, tmp_path):
+    """Discord notification should include '+' for positive American odds."""
+    store.DB_PATH = str(tmp_path / "signals_pos.sqlite")
+    games = [
+        {
+            "game_id": "G3",
+            "home": "HOM",
+            "away": "AWY",
+            "start_utc": "2099-09-07T17:00:00Z",
+            "market": "ML",
+            "odds_home": None,
+            "odds_away": None,
+            "line_home": None,
+            "line_away": None,
+            "ml_home": -110,
+            "ml_away": 120,
+        }
+    ]
+    monkeypatch.setattr(app_main, "fetch_hr_nfl_moneylines", lambda days_from=7: games)
+    ref = {"G3": {"fav_ladder": {}, "ml": {"home": 0.45, "away": 0.55}}}
+    monkeypatch.setattr(app_main, "reference_probs_for", lambda gs: ref)
+    pushed = {}
+    monkeypatch.setattr(app_main, "push", lambda title, lines: pushed.update(title=title, lines=lines))
+    monkeypatch.setattr(app_main, "BANKROLL", 100.0)
+    monkeypatch.setattr(app_main, "MIN_EDGE", 0.01)
+    monkeypatch.setattr(app_main, "MIN_EDGE_ML", 0.01)
+    monkeypatch.setattr(app_main, "KELLY_FRAC", 0.5)
+    monkeypatch.setattr(app_main, "MAX_UNIT", 0.02)
+    monkeypatch.setattr(app_main, "MAX_INTERP_GAP", 2.0)
+    app_main.run_once()
+    assert pushed.get("lines") and "+120" in pushed["lines"][0]
