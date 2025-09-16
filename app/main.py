@@ -440,31 +440,31 @@ def schedule_jobs():
     def sc(n: int) -> int:
         return max(1, int(round(n * scale)))
 
-    # Sunday 1pm slate
-    _schedule_at("sunday", _alloc_times("11:30", "11:45", sc(8)), "sun_1p_inactives")
-    _schedule_at("sunday", _alloc_times("12:30", "12:59", sc(12)), "sun_1p_final")
+    # Sunday 1pm slate (halve polls to preserve Odds API credits)
+    _schedule_at("sunday", _alloc_times("11:30", "11:45", sc(4)), "sun_1p_inactives")
+    _schedule_at("sunday", _alloc_times("12:30", "12:59", sc(6)), "sun_1p_final")
 
     # Sunday 4:25pm slate
-    _schedule_at("sunday", _alloc_times("14:55", "15:10", sc(6)), "sun_425_inactives")
-    _schedule_at("sunday", _alloc_times("16:05", "16:25", sc(4)), "sun_425_final")
+    _schedule_at("sunday", _alloc_times("14:55", "15:10", sc(3)), "sun_425_inactives")
+    _schedule_at("sunday", _alloc_times("16:05", "16:25", sc(2)), "sun_425_final")
 
     # SNF (approx 20:20): T−75 to T−10
-    _schedule_at("sunday", _alloc_times("19:05", "20:10", sc(6)), "snf")
+    _schedule_at("sunday", _alloc_times("19:05", "20:10", sc(3)), "snf")
 
     # MNF (approx 20:15)
-    _schedule_at("monday", _alloc_times("19:00", "20:05", sc(6)), "mnf")
+    _schedule_at("monday", _alloc_times("19:00", "20:05", sc(3)), "mnf")
 
     # TNF (approx 20:15)
-    _schedule_at("thursday", _alloc_times("19:00", "20:05", sc(6)), "tnf")
+    _schedule_at("thursday", _alloc_times("19:00", "20:05", sc(3)), "tnf")
 
     # Sunday night openers for next week
-    _schedule_at("sunday", _alloc_times("20:00", "23:00", sc(6)), "sun_openers")
+    _schedule_at("sunday", _alloc_times("20:00", "23:00", sc(3)), "sun_openers")
 
     # Friday game-status window
-    _schedule_at("friday", _alloc_times("15:30", "18:30", sc(4)), "fri_status")
+    _schedule_at("friday", _alloc_times("15:30", "18:30", sc(2)), "fri_status")
 
     # Saturday limits rise
-    _schedule_at("saturday", _alloc_times("18:00", "23:30", sc(4)), "sat_limits")
+    _schedule_at("saturday", _alloc_times("18:00", "23:30", sc(2)), "sat_limits")
 
     logger.info("Optimized poll schedule installed (scale=%.2f). First run firing now.", scale)
     run_once()

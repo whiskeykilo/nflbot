@@ -17,14 +17,14 @@ Scan Hard Rock NFL spreads against a sharp reference (Pinnacle), compute no‑vi
 
 ## Scheduling
 
-By default the bot installs an optimized weekly schedule (~248 polls/month) focused on the highest‑signal windows:
+By default the bot installs an optimized weekly schedule (~124 polls/month) focused on the highest‑signal windows while staying within a tighter credit budget:
 
-- Sunday 1pm slate: Inactives 11:30–11:45 (8 polls), final 12:30–12:59 (12)
-- Sunday 4:25pm slate: Inactives 14:55–15:10 (6), final 16:05–16:25 (4)
-- SNF/MNF/TNF: 6 polls each T−75 to T−10
-- Sunday night openers: 6 polls 20:00–23:00
-- Friday status: 4 polls 15:30–18:30
-- Saturday limits rise: 4 polls 18:00–23:30
+- Sunday 1pm slate: Inactives 11:30–11:45 (4 polls), final 12:30–12:59 (6)
+- Sunday 4:25pm slate: Inactives 14:55–15:10 (3), final 16:05–16:25 (2)
+- SNF/MNF/TNF: 3 polls each T−75 to T−10
+- Sunday night openers: 3 polls 20:00–23:00
+- Friday status: 2 polls 15:30–18:30
+- Saturday limits rise: 2 polls 18:00–23:30
 
 Behavior:
 
