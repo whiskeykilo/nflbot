@@ -18,7 +18,7 @@ _LAST_SIG: str | None = None
 _SKIP_NEXT: bool = False
 
 BANKROLL        = float(os.getenv("BANKROLL","500"))
-MIN_EDGE        = float(os.getenv("MIN_EDGE","0.01"))
+MIN_EDGE        = float(os.getenv("MIN_EDGE","0.03"))
 MIN_EDGE_ML     = float(os.getenv("MIN_EDGE_ML","0.007"))
 KELLY_FRAC      = float(os.getenv("KELLY_FRACTION","0.5"))
 MAX_UNIT        = float(os.getenv("MAX_UNIT","0.02"))
@@ -246,11 +246,11 @@ def run_once():
             # Dynamic EV threshold based on mapping risk
             abs_line = abs(float(line))
             near_key = min(abs(abs_line-3.0), abs(abs_line-7.0)) <= 0.5
-            thr = max(MIN_EDGE, 0.01)
+            thr = max(MIN_EDGE, 0.03)
             if meta.get("whole") or meta.get("interpolated"):
-                thr = max(thr, 0.015)
+                thr = max(thr, 0.035)
             if meta.get("interpolated") and near_key:
-                thr = max(thr, 0.02)
+                thr = max(thr, 0.04)
             evals.append((ev,side,odds,p_win,k,stake,line,p_push,thr))
         if evals:
             ev,side,odds,p_true,k,stake,line,p_push,thr=max(evals,key=lambda x:x[0])

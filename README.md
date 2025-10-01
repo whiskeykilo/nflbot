@@ -87,7 +87,7 @@ URL (and any tuning variables) as environment variables.
 ```bash
 docker run --name nflbot \
   -e DISCORD_WEBHOOK_URL="$DISCORD_WEBHOOK_URL" \
-  -e BANKROLL=500 -e MIN_EDGE=0.01 -e KELLY_FRACTION=0.5 -e MAX_UNIT=0.02 \
+  -e BANKROLL=500 -e MIN_EDGE=0.03 -e KELLY_FRACTION=0.5 -e MAX_UNIT=0.02 \
   -e USE_OPT_SCHEDULE=1 -e WEEKDAY_RUN_TIME=09:00 -e SUNDAY_RUN_TIME=12:00 \
   -e THEODDSAPI="${THEODDSAPI:-}" \
   -v $(pwd)/data:/data \
@@ -104,7 +104,7 @@ cron or compose setup. Logs print to stdout.
 
 - `DISCORD_WEBHOOK_URL`: Discord webhook (required to send alerts).
 - `BANKROLL`: Total bankroll in dollars (default `500`).
-- `MIN_EDGE`: Base EV threshold (decimal). Default `0.01` (1%).
+- `MIN_EDGE`: Base EV threshold (decimal). Default `0.03` (3%).
 - `KELLY_FRACTION`: Fractional Kelly to apply (default `0.5`).
 - `MAX_UNIT`: Max stake as fraction of bankroll (default `0.02`).
 - `MAX_INTERP_GAP`: Max points away for interpolation (default `1.0`).
@@ -115,7 +115,7 @@ cron or compose setup. Logs print to stdout.
 
 Notes:
 
-- Dynamic EV thresholding raises the bar to 1.5–2.0% in riskier mappings (whole numbers or interpolations near 3/7).
+- Dynamic EV thresholding raises the bar to ~3.5–4.0% in riskier mappings (whole numbers or interpolations near 3/7).
 - Signals are de‑duplicated in SQLite via a unique key.
 
 SQLite ledger is written to `/data/bets.sqlite`. Mount `/data` to persist.
