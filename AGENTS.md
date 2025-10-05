@@ -77,8 +77,8 @@ Required:
 Core tuning (defaults shown):
 
 - `BANKROLL=500`: Bankroll in dollars used for Kelly sizing.
-- `MIN_EDGE=0.01`: Base EV threshold for spreads.
-- `MIN_EDGE_ML=0.007`: Base EV threshold for moneylines.
+- `MIN_EDGE=0.03`: Base EV threshold for spreads (minimum 3%).
+- `MIN_EDGE_ML=0.03`: Base EV threshold for moneylines (minimum 3%).
 - `KELLY_FRACTION=0.5`: Fractional Kelly multiplier.
 - `MAX_UNIT=0.02`: Max stake fraction of bankroll per play.
 - `MAX_DAYS_AHEAD=7`: Window of upcoming games to consider.

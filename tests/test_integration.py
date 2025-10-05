@@ -53,7 +53,7 @@ def test_integration_run_once_pushes_and_persists(monkeypatch, tmp_path):
 
     # Configure bankroll/thresholds to ensure inclusion
     monkeypatch.setattr(app_main, "BANKROLL", 100.0)
-    monkeypatch.setattr(app_main, "MIN_EDGE", 0.01)
+    monkeypatch.setattr(app_main, "MIN_EDGE", 0.03)
     monkeypatch.setattr(app_main, "KELLY_FRAC", 0.5)
     monkeypatch.setattr(app_main, "MAX_UNIT", 0.02)
     monkeypatch.setattr(app_main, "MAX_INTERP_GAP", 2.0)
@@ -105,8 +105,8 @@ def test_integration_run_once_moneyline(monkeypatch, tmp_path):
     pushed = {}
     monkeypatch.setattr(app_main, "push", lambda title, lines: pushed.update(title=title, lines=lines))
     monkeypatch.setattr(app_main, "BANKROLL", 100.0)
-    monkeypatch.setattr(app_main, "MIN_EDGE", 0.01)
-    monkeypatch.setattr(app_main, "MIN_EDGE_ML", 0.01)
+    monkeypatch.setattr(app_main, "MIN_EDGE", 0.03)
+    monkeypatch.setattr(app_main, "MIN_EDGE_ML", 0.03)
     monkeypatch.setattr(app_main, "KELLY_FRAC", 0.5)
     monkeypatch.setattr(app_main, "MAX_UNIT", 0.02)
     monkeypatch.setattr(app_main, "MAX_INTERP_GAP", 2.0)
@@ -141,8 +141,8 @@ def test_integration_positive_odds_format(monkeypatch, tmp_path):
     pushed = {}
     monkeypatch.setattr(app_main, "push", lambda title, lines: pushed.update(title=title, lines=lines))
     monkeypatch.setattr(app_main, "BANKROLL", 100.0)
-    monkeypatch.setattr(app_main, "MIN_EDGE", 0.01)
-    monkeypatch.setattr(app_main, "MIN_EDGE_ML", 0.01)
+    monkeypatch.setattr(app_main, "MIN_EDGE", 0.03)
+    monkeypatch.setattr(app_main, "MIN_EDGE_ML", 0.03)
     monkeypatch.setattr(app_main, "KELLY_FRAC", 0.5)
     monkeypatch.setattr(app_main, "MAX_UNIT", 0.02)
     monkeypatch.setattr(app_main, "MAX_INTERP_GAP", 2.0)
