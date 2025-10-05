@@ -87,7 +87,7 @@ URL (and any tuning variables) as environment variables.
 ```bash
 docker run --name nflbot \
   -e DISCORD_WEBHOOK_URL="$DISCORD_WEBHOOK_URL" \
-  -e BANKROLL=500 -e MIN_EDGE=0.03 -e KELLY_FRACTION=0.5 -e MAX_UNIT=0.02 \
+  -e BANKROLL=500 -e MIN_EDGE=0.03 -e MIN_EDGE_ML=0.03 -e KELLY_FRACTION=0.5 -e MAX_UNIT=0.02 \
   -e USE_OPT_SCHEDULE=1 -e WEEKDAY_RUN_TIME=09:00 -e SUNDAY_RUN_TIME=12:00 \
   -e THEODDSAPI="${THEODDSAPI:-}" \
   -v $(pwd)/data:/data \
@@ -104,7 +104,8 @@ cron or compose setup. Logs print to stdout.
 
 - `DISCORD_WEBHOOK_URL`: Discord webhook (required to send alerts).
 - `BANKROLL`: Total bankroll in dollars (default `500`).
-- `MIN_EDGE`: Base EV threshold (decimal). Default `0.03` (3%).
+- `MIN_EDGE`: Base EV threshold (decimal). Default `0.03` (3%). Values below 3% are clamped.
+- `MIN_EDGE_ML`: Moneyline EV threshold. Default `0.03` (3%). Values below 3% are clamped.
 - `KELLY_FRACTION`: Fractional Kelly to apply (default `0.5`).
 - `MAX_UNIT`: Max stake as fraction of bankroll (default `0.02`).
 - `MAX_INTERP_GAP`: Max points away for interpolation (default `1.0`).

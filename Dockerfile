@@ -18,6 +18,7 @@ VOLUME ["/data"]
 # Default environment (override as needed)
 ENV BANKROLL=500 \
     MIN_EDGE=0.03 \
+    MIN_EDGE_ML=0.03 \
     KELLY_FRACTION=0.5 \
     MAX_UNIT=0.02 \
     WEEKDAY_RUN_TIME=09:00 \

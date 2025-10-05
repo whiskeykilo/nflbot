@@ -18,8 +18,16 @@ _LAST_SIG: str | None = None
 _SKIP_NEXT: bool = False
 
 BANKROLL        = float(os.getenv("BANKROLL","500"))
-MIN_EDGE        = float(os.getenv("MIN_EDGE","0.03"))
-MIN_EDGE_ML     = float(os.getenv("MIN_EDGE_ML","0.007"))
+def _clamp_edge(value: str, floor: float = 0.03) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return floor
+    return parsed if parsed >= floor else floor
+
+
+MIN_EDGE        = _clamp_edge(os.getenv("MIN_EDGE", "0.03"))
+MIN_EDGE_ML     = _clamp_edge(os.getenv("MIN_EDGE_ML", "0.03"))
 KELLY_FRAC      = float(os.getenv("KELLY_FRACTION","0.5"))
 MAX_UNIT        = float(os.getenv("MAX_UNIT","0.02"))
 MAX_DAYS_AHEAD  = int(os.getenv("MAX_DAYS_AHEAD", "7"))
@@ -277,7 +285,8 @@ def run_once():
             ml_evals.append((ev, side, odds, p_true, k, stake))
         if ml_evals:
             ev, side, odds, p_true, k, stake = max(ml_evals, key=lambda x:x[0])
-            if ev >= MIN_EDGE_ML and stake >= 1.0:
+            thr_ml = max(MIN_EDGE_ML, 0.03)
+            if ev >= thr_ml and stake >= 1.0:
                 team = g["home"] if side == "home" else g["away"]
                 pick = f"{team} ML"
                 p_be = break_even_prob(odds, 0.0)
