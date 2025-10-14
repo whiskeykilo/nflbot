@@ -36,11 +36,49 @@ TEST_FORCE_COUNT = int(os.getenv("TEST_FORCE_COUNT", "3"))
 MAX_INTERP_GAP  = float(os.getenv("MAX_INTERP_GAP", "1.0"))
 TITLE      = "NFL +EV Signals on Hard Rock Bet"
 
+BASE_SPREAD_EDGE = max(MIN_EDGE, 0.03)
+BASE_ML_EDGE = max(MIN_EDGE_ML, 0.03)
+
 # When to run scheduled jobs
 SUNDAY_RUN_TIME  = os.getenv("SUNDAY_RUN_TIME", "12:00")
 WEEKDAY_RUN_TIME = os.getenv("WEEKDAY_RUN_TIME", "09:00")
 
 def clamp(x, lo, hi): return max(lo, min(hi, x))
+
+
+def _spread_edge_threshold(meta: Dict[str, bool] | None, line: float | int | None) -> float:
+    """Return the minimum EV required for a spread opportunity."""
+
+    thr = BASE_SPREAD_EDGE
+    if line is None:
+        return thr
+    try:
+        abs_line = abs(float(line))
+    except (TypeError, ValueError):
+        return thr
+    meta = meta or {}
+    near_key = min(abs(abs_line - 3.0), abs(abs_line - 7.0)) <= 0.5
+    if meta.get("whole") or meta.get("interpolated"):
+        thr = max(thr, 0.035)
+    if meta.get("interpolated") and near_key:
+        thr = max(thr, 0.04)
+    return thr
+
+
+def _passes_threshold(alert: Dict[str, object]) -> bool:
+    """Ensure the alert's computed edge clears its configured threshold."""
+
+    edge = float(alert.get("edge", 0.0) or 0.0)
+    thr = alert.get("threshold")
+    if isinstance(thr, (int, float)):
+        threshold = float(thr)
+    else:
+        market = alert.get("market")
+        if market == "ML":
+            threshold = BASE_ML_EDGE
+        else:
+            threshold = BASE_SPREAD_EDGE
+    return edge >= threshold - 1e-9
 
 def _hr_signature(games: list[dict]) -> str:
     try:
@@ -251,14 +289,7 @@ def run_once():
             ev=expected_value_per_dollar(p_win, odds, p_push)
             k=kelly_fraction(p_win, odds, p_push)
             stake=round(BANKROLL*clamp(KELLY_FRAC*max(0,k),0.0,MAX_UNIT),2)
-            # Dynamic EV threshold based on mapping risk
-            abs_line = abs(float(line))
-            near_key = min(abs(abs_line-3.0), abs(abs_line-7.0)) <= 0.5
-            thr = max(MIN_EDGE, 0.03)
-            if meta.get("whole") or meta.get("interpolated"):
-                thr = max(thr, 0.035)
-            if meta.get("interpolated") and near_key:
-                thr = max(thr, 0.04)
+            thr = _spread_edge_threshold(meta, line)
             evals.append((ev,side,odds,p_win,k,stake,line,p_push,thr))
         if evals:
             ev,side,odds,p_true,k,stake,line,p_push,thr=max(evals,key=lambda x:x[0])
@@ -269,6 +300,7 @@ def run_once():
                 a={"game_id":rid,"market":"SPREAD","pick":pick,"odds":odds,
                    "p_true":p_true,"p_be":p_be,"p_push":p_push,
                    "edge":ev,"kelly":k,"stake":stake,
+                   "threshold":thr,
                    "event":f"{g['away']} @ {g['home']}","start":g["start_utc"]}
                 alerts.append(a)
         # ----- Moneylines -----
@@ -285,7 +317,7 @@ def run_once():
             ml_evals.append((ev, side, odds, p_true, k, stake))
         if ml_evals:
             ev, side, odds, p_true, k, stake = max(ml_evals, key=lambda x:x[0])
-            thr_ml = max(MIN_EDGE_ML, 0.03)
+            thr_ml = BASE_ML_EDGE
             if ev >= thr_ml and stake >= 1.0:
                 team = g["home"] if side == "home" else g["away"]
                 pick = f"{team} ML"
@@ -293,8 +325,11 @@ def run_once():
                 a={"game_id":rid,"market":"ML","pick":pick,"odds":odds,
                    "p_true":p_true,"p_be":p_be,"p_push":0.0,
                    "edge":ev,"kelly":k,"stake":stake,
+                   "threshold":thr_ml,
                    "event":f"{g['away']} @ {g['home']}","start":g["start_utc"]}
                 alerts.append(a)
+
+    alerts = [a for a in alerts if _passes_threshold(a)]
 
     forced = False
     if not alerts and TEST_FORCE_OPPS:
