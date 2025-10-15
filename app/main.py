@@ -16,6 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 _LAST_SIG: str | None = None
 _SKIP_NEXT: bool = False
+_QUOTA_NOTIFIED_FOR: tuple[int, int] | None = None
 
 BANKROLL        = float(os.getenv("BANKROLL","500"))
 def _clamp_edge(value: str, floor: float = 0.03) -> float:
@@ -95,15 +96,50 @@ def _hr_signature(games: list[dict]) -> str:
     except Exception:
         return ""
 
+def _current_month_key(now: datetime | None = None) -> tuple[int, int]:
+    now = now or datetime.now(timezone.utc)
+    return now.year, now.month
+
+
+def _reset_quota_notice(now: datetime | None = None) -> None:
+    global _QUOTA_NOTIFIED_FOR
+    current = _current_month_key(now)
+    if _QUOTA_NOTIFIED_FOR and _QUOTA_NOTIFIED_FOR != current:
+        logger.info(
+            "New calendar month detected; re-enabling quota Discord notifications (previous=%04d-%02d)",
+            _QUOTA_NOTIFIED_FOR[0],
+            _QUOTA_NOTIFIED_FOR[1],
+        )
+        _QUOTA_NOTIFIED_FOR = None
+
+
+def _notify_quota_once(now: datetime | None = None) -> None:
+    global _QUOTA_NOTIFIED_FOR
+    current = _current_month_key(now)
+    if _QUOTA_NOTIFIED_FOR == current:
+        logger.info(
+            "Quota notice already delivered for %04d-%02d; suppressing duplicate Discord notification",
+            current[0],
+            current[1],
+        )
+        return
+    push(
+        TITLE + " - Quota",
+        [
+            "The Odds API credits are exhausted or rate-limited.",
+            "Skipping this run to preserve budget.",
+        ],
+    )
+    _QUOTA_NOTIFIED_FOR = current
+
+
 def run_once():
+    _reset_quota_notice()
     try:
         games = fetch_hr_nfl_moneylines(days_from=MAX_DAYS_AHEAD)
     except OddsApiQuotaError as qe:
         logger.error("Odds API quota/rate limit encountered fetching Hard Rock: %s", qe)
-        push(TITLE + " - Quota", [
-            "The Odds API credits are exhausted or rate-limited.",
-            "Skipping this run to preserve budget.",
-        ])
+        _notify_quota_once()
         return
     except Exception:
         logger.exception("Failed to fetch Hard Rock NFL odds")
@@ -121,10 +157,7 @@ def run_once():
         ref   = reference_probs_for(games)
     except OddsApiQuotaError as qe:
         logger.error("Odds API quota/rate limit encountered fetching Pinnacle refs: %s", qe)
-        push(TITLE + " - Quota", [
-            "The Odds API credits are exhausted or rate-limited.",
-            "Skipping this run to preserve budget.",
-        ])
+        _notify_quota_once()
         return
     except Exception:
         logger.exception("Failed to fetch reference probabilities")
