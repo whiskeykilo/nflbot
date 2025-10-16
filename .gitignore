@@ -206,3 +206,6 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 .DS_Store
+
+# Runtime SQLite ledger (created by mounting ./data when running locally)
+data/
