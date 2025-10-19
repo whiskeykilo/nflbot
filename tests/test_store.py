@@ -24,7 +24,8 @@ def test_save_signal_persists_data_with_negative_odds_and_zero_kelly(tmp_path):
         "stake": 10.0,
     }
 
-    store.save_signal(sig)
+    inserted = store.save_signal(sig)
+    assert inserted is True
 
     with sqlite3.connect(store.DB_PATH) as conn:
         row = conn.execute(
@@ -54,8 +55,8 @@ def test_save_signal_deduplicates_on_unique_key(tmp_path):
     }
 
     # Insert the same signal twice; unique index should keep one row
-    store.save_signal(sig)
-    store.save_signal(sig)
+    assert store.save_signal(sig) is True
+    assert store.save_signal(sig) is False
 
     with sqlite3.connect(store.DB_PATH) as conn:
         cnt = conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0]
@@ -63,7 +64,7 @@ def test_save_signal_deduplicates_on_unique_key(tmp_path):
 
     # Changing odds should allow a new row (unique key includes odds)
     sig2 = dict(sig, odds=-115)
-    store.save_signal(sig2)
+    assert store.save_signal(sig2) is True
     with sqlite3.connect(store.DB_PATH) as conn:
         cnt = conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0]
     assert cnt == 2

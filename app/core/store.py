@@ -11,9 +11,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS signals_unique
 """
 def db():
     c = sqlite3.connect(DB_PATH); c.executescript(DDL); return c
-def save_signal(sig:dict):
+def save_signal(sig:dict) -> bool:
     with db() as c:
-        c.execute("""INSERT OR IGNORE INTO signals(ts,game_id,market,pick,odds,p_true,edge,kelly,stake,status)
+        cur = c.execute(
+            """INSERT OR IGNORE INTO signals(ts,game_id,market,pick,odds,p_true,edge,kelly,stake,status)
                      VALUES (?,?,?,?,?,?,?,?,?,?)""",
-                  (int(time.time()), sig["game_id"], sig["market"], sig["pick"], sig["odds"],
-                   sig["p_true"], sig["edge"], sig["kelly"], sig["stake"], "NEW"))
+            (
+                int(time.time()),
+                sig["game_id"],
+                sig["market"],
+                sig["pick"],
+                sig["odds"],
+                sig["p_true"],
+                sig["edge"],
+                sig["kelly"],
+                sig["stake"],
+                "NEW",
+            ),
+        )
+        return bool(cur.rowcount)
