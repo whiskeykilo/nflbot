@@ -456,9 +456,22 @@ def run_once():
         except Exception:
             return iso_utc
 
-    for a in alerts[:5]:
+    sent = 0
+    MAX_NOTIFICATIONS = 5
+    for a in alerts:
+        if sent >= MAX_NOTIFICATIONS:
+            break
+        inserted = True
         if not forced:
-            save_signal(a)
+            inserted = save_signal(a)
+        if not inserted:
+            logger.info(
+                "Skipping duplicate alert for %s (%s at %s) — already notified",
+                a.get("event"),
+                a.get("pick"),
+                a.get("odds"),
+            )
+            continue
         # Discord: minimal, readable, with emojis
         away, home = a['event'].split(' @ ')
         title_line = f"{abbr(away)} @ {abbr(home)} — {_fmt_kickoff_local(a['start'])} 👊 {a['edge']*100:+.1f}% EV"
@@ -466,6 +479,12 @@ def run_once():
         pick_line = f"* Pick: {a['pick']} at {a['odds']:+d}"
         stake_line = f"* Stake: ${a['stake']:.2f}"
         lines.append(f"\n{title_line}\n{pick_line}\n{stake_line}")
+        sent += 1
+
+    if not lines:
+        logger.info("All candidate alerts already notified; skipping Discord push")
+        return
+
     logger.info("Pushing %d alert(s) to Discord%s", len(lines), " (test)" if forced else "")
     push(TITLE + (" - Test" if forced else ""), lines)
 
