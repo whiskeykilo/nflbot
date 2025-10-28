@@ -36,10 +36,11 @@ def _reload_main():
 
 
 class Resp:
-    def __init__(self, status=402, data=None):
+    def __init__(self, status=402, data=None, text=""):
         self.status_code = status
         self._data = data or []
         self.headers = {"X-Requests-Remaining": "0"}
+        self.text = text
 
     def raise_for_status(self):
         if self.status_code != 200:
@@ -51,6 +52,13 @@ class Resp:
 
 def test_hardrock_quota_raises():
     with patch("app.adapters.hardrock_odds.requests.get", return_value=Resp(402)):
+        with pytest.raises(OddsApiQuotaError):
+            fetch_hr_nfl_moneylines(days_from=1)
+
+
+def test_hardrock_unauthorized_quota_raises():
+    payload = {"success": False, "message": "Monthly plan quota reached"}
+    with patch("app.adapters.hardrock_odds.requests.get", return_value=Resp(401, data=payload)):
         with pytest.raises(OddsApiQuotaError):
             fetch_hr_nfl_moneylines(days_from=1)
 

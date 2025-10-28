@@ -70,10 +70,38 @@ def _to_utc(dt_str: str) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def _looks_like_quota(resp: requests.Response, body_text: str) -> bool:
+    """Best-effort detection of quota exhaustion style responses."""
+
+    lowered = body_text.lower()
+    if any(token in lowered for token in ("quota", "rate limit", "plan", "subscription", "insufficient")):
+        return True
+    remaining = resp.headers.get("x-requests-remaining") or resp.headers.get("X-Requests-Remaining")
+    if remaining is not None:
+        try:
+            if int(remaining) <= 0:
+                return True
+        except ValueError:
+            pass
+    return False
+
+
 def _check_quota_or_raise(resp: requests.Response) -> None:
     # Raise specific error on common quota/rate limit statuses
     if resp.status_code in (402, 429):
         raise OddsApiQuotaError(f"The Odds API quota/rate limit hit (HTTP {resp.status_code})")
+    if resp.status_code == 401:
+        body_text = ""
+        try:
+            data = resp.json()
+            if isinstance(data, dict):
+                body_text = " ".join(str(v) for v in data.values() if v is not None)
+            else:
+                body_text = str(data)
+        except ValueError:
+            body_text = getattr(resp, "text", "") or ""
+        if _looks_like_quota(resp, body_text):
+            raise OddsApiQuotaError("The Odds API quota/rate limit hit (HTTP 401)")
     # On success, emit warning if headers indicate zero remaining
     try:
         remaining = resp.headers.get("x-requests-remaining") or resp.headers.get("X-Requests-Remaining")
