@@ -236,7 +236,7 @@ def reference_probs_for(games: List[Dict]) -> Dict[str, Dict[str, float]]:
         msg = str(exc)
         if any(k in msg.lower() for k in ("no_active_plan", "insufficient", "quota", "rate limit")):
             raise OddsApiQuotaError("The Odds API quota/rate limit hit") from exc
-        raise RuntimeError("Failed to fetch Pinnacle reference probabilities") from exc
+        raise RuntimeError(f"Failed to fetch Pinnacle reference probabilities: {exc}") from exc
 
     index = {e.get("id"): e for e in data or []}
 

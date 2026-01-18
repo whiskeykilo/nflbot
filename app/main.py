@@ -1,4 +1,4 @@
-import os, time, schedule, logging
+import os, time, schedule, logging, requests
 from typing import List, Dict
 from datetime import datetime, timezone, timedelta
 from app.adapters.hardrock_odds import fetch_hr_nfl_moneylines
@@ -133,6 +133,20 @@ def _notify_quota_once(now: datetime | None = None) -> None:
     _QUOTA_NOTIFIED_FOR = current
 
 
+def _extract_ref_prob_reason(exc: Exception) -> str | None:
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, requests.Timeout):
+            return "timeout"
+        if isinstance(current, requests.HTTPError):
+            status = getattr(current.response, "status_code", None)
+            return f"HTTP {status}" if status else "HTTP error"
+        current = current.__cause__ or current.__context__
+    return None
+
+
 def run_once():
     _reset_quota_notice()
     try:
@@ -159,9 +173,13 @@ def run_once():
         logger.error("Odds API quota/rate limit encountered fetching Pinnacle refs: %s", qe)
         _notify_quota_once()
         return
-    except Exception:
-        logger.exception("Failed to fetch reference probabilities")
-        push(TITLE + " - Error", ["Failed to fetch Pinnacle reference probabilities; aborting."])
+    except Exception as exc:
+        logger.exception("Failed to fetch reference probabilities: %s", exc)
+        reason = _extract_ref_prob_reason(exc)
+        message = "Failed to fetch Pinnacle reference probabilities; aborting."
+        if reason:
+            message = f"Failed to fetch Pinnacle reference probabilities ({reason}); aborting."
+        push(TITLE + " - Error", [message])
         return
     # Only consider games that have Pinnacle reference probabilities
     games = [g for g in games if g["game_id"] in ref]
