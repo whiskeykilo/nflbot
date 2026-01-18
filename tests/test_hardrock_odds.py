@@ -14,6 +14,22 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from app.adapters.hardrock_odds import fetch_hr_nfl_moneylines
 
 
+class DummySession:
+    def __init__(self, response):
+        self._response = response
+        self.calls = []
+
+    def get(self, url, params=None, timeout=None):
+        self.calls.append({"url": url, "params": params, "timeout": timeout})
+        return self._response
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
 def _mock_response(json_data, status_code=200):
     response = Mock()
     response.json.return_value = json_data
@@ -61,7 +77,10 @@ def test_fetch_hr_nfl_moneylines_parses_response_and_skips_past_games():
         },
     ]
 
-    with patch("app.adapters.hardrock_odds.requests.get", return_value=_mock_response(sample)):
+    with patch(
+        "app.adapters.hardrock_odds._build_retry_session",
+        return_value=DummySession(_mock_response(sample)),
+    ):
         games = fetch_hr_nfl_moneylines(days_from=36500)
 
     assert games == [
@@ -83,13 +102,14 @@ def test_fetch_hr_nfl_moneylines_parses_response_and_skips_past_games():
 
 def test_fetch_hr_nfl_moneylines_uses_api_key_and_days_from():
     sample = []
-    mock_get = Mock(return_value=_mock_response(sample))
+    session = DummySession(_mock_response(sample))
 
     with patch.dict(os.environ, {"THEODDSAPI": "testkey"}):
-        with patch("app.adapters.hardrock_odds.requests.get", mock_get):
+        with patch("app.adapters.hardrock_odds._build_retry_session", return_value=session):
             fetch_hr_nfl_moneylines(days_from=2)
 
-    params = mock_get.call_args.kwargs.get("params")
+    assert session.calls
+    params = session.calls[0]["params"]
     assert params["apiKey"] == "testkey"
     assert params["daysFrom"] == "2"
 
@@ -98,12 +118,17 @@ def test_fetch_hr_nfl_moneylines_http_error():
     response = _mock_response({}, status_code=500)
     response.raise_for_status.side_effect = requests.HTTPError(response=response)
 
-    with patch("app.adapters.hardrock_odds.requests.get", return_value=response):
+    with patch(
+        "app.adapters.hardrock_odds._build_retry_session",
+        return_value=DummySession(response),
+    ):
         with pytest.raises(RuntimeError):
             fetch_hr_nfl_moneylines()
 
 
 def test_fetch_hr_nfl_moneylines_timeout():
-    with patch("app.adapters.hardrock_odds.requests.get", side_effect=requests.Timeout):
+    session = DummySession(_mock_response({}))
+    session.get = Mock(side_effect=requests.Timeout)
+    with patch("app.adapters.hardrock_odds._build_retry_session", return_value=session):
         with pytest.raises(RuntimeError):
             fetch_hr_nfl_moneylines()

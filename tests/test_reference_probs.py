@@ -24,6 +24,20 @@ class DummyResponse:
         return self._data
 
 
+class DummySession:
+    def __init__(self, response):
+        self._response = response
+
+    def get(self, url, params=None, timeout=None):
+        return self._response
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
 def test_reference_probs_from_external(monkeypatch):
     games = [
         {"game_id": "G1", "home": "H", "away": "A"}
@@ -58,10 +72,11 @@ def test_reference_probs_from_external(monkeypatch):
         }
     ]
 
-    def fake_get(url, params=None, timeout=0):
-        return DummyResponse(external)
-
-    monkeypatch.setattr(requests, "get", fake_get)
+    session = DummySession(DummyResponse(external))
+    monkeypatch.setattr(
+        "app.adapters.reference_probs._build_retry_session",
+        lambda: session,
+    )
 
     probs = reference_probs_for(games)
 
@@ -79,10 +94,14 @@ def test_reference_probs_raises_on_external_failure(monkeypatch):
         {"game_id": "G1", "home": "H", "away": "A"}
     ]
 
-    def fake_get(url, params=None, timeout=0):
+    session = DummySession(DummyResponse([]))
+    def failing_get(url, params=None, timeout=None):
         raise requests.RequestException
-
-    monkeypatch.setattr(requests, "get", fake_get)
+    session.get = failing_get
+    monkeypatch.setattr(
+        "app.adapters.reference_probs._build_retry_session",
+        lambda: session,
+    )
 
     with pytest.raises(RuntimeError):
         reference_probs_for(games)
