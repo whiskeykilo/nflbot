@@ -30,9 +30,11 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone, timedelta
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from dateutil import parser as dateparser
 from app.core.errors import OddsApiQuotaError
 
@@ -111,13 +113,34 @@ def _check_quota_or_raise(resp: requests.Response) -> None:
         pass
 
 
-def fetch_hr_nfl_moneylines(timeout: float = 10.0, days_from: int = 7) -> List[Dict]:
+def _build_retry_session() -> requests.Session:
+    session = requests.Session()
+    retries = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        status=3,
+        backoff_factor=0.5,
+        status_forcelist=(500, 502, 503, 504),
+        allowed_methods=frozenset({"GET"}),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retries)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+def fetch_hr_nfl_moneylines(
+    timeout: Tuple[float, float] = (3.0, 15.0),
+    days_from: int = 7,
+) -> List[Dict]:
     """Retrieve live NFL spread lines from Hard Rock.
 
     Parameters
     ----------
     timeout:
-        Maximum time in seconds to wait for the HTTP request.
+        Tuple of (connect timeout, read timeout) in seconds.
 
     Returns
     -------
@@ -138,7 +161,8 @@ def fetch_hr_nfl_moneylines(timeout: float = 10.0, days_from: int = 7) -> List[D
         params["apiKey"] = api_key
 
     try:
-        resp = requests.get(API_URL, params=params, timeout=timeout)
+        with _build_retry_session() as session:
+            resp = session.get(API_URL, params=params, timeout=timeout)
         _check_quota_or_raise(resp)
         resp.raise_for_status()
     except requests.Timeout as exc:

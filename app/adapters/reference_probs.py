@@ -12,9 +12,11 @@ request failures raise ``RuntimeError`` so the caller can notify and stop.
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from app.core.errors import OddsApiQuotaError
 import logging
 
@@ -80,6 +82,25 @@ ODDS_API_URL = (
     "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds"
 )
 BOOKMAKER = "pinnacle"
+PINNACLE_TIMEOUT: Tuple[float, float] = (3.0, 12.0)
+
+
+def _build_retry_session() -> requests.Session:
+    session = requests.Session()
+    retries = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        status=3,
+        backoff_factor=0.5,
+        status_forcelist=(500, 502, 503, 504),
+        allowed_methods=frozenset({"GET"}),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retries)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
 
 
 def _devig(p1: float, p2: float) -> tuple[float, float]:
@@ -216,7 +237,8 @@ def reference_probs_for(games: List[Dict]) -> Dict[str, Dict[str, float]]:
         params["apiKey"] = api_key
     # Require external reference prices; raise on failure so caller can abort
     try:
-        resp = requests.get(ODDS_API_URL, params=params, timeout=5)
+        with _build_retry_session() as session:
+            resp = session.get(ODDS_API_URL, params=params, timeout=PINNACLE_TIMEOUT)
         # Quota/rate limit detection
         if resp.status_code in (402, 429):
             raise OddsApiQuotaError(f"The Odds API quota/rate limit hit (HTTP {resp.status_code})")
