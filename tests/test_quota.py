@@ -50,21 +50,44 @@ class Resp:
         return self._data
 
 
+class DummySession:
+    def __init__(self, response):
+        self._response = response
+
+    def get(self, url, params=None, timeout=None):
+        return self._response
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
 def test_hardrock_quota_raises():
-    with patch("app.adapters.hardrock_odds.requests.get", return_value=Resp(402)):
+    with patch(
+        "app.adapters.hardrock_odds._build_retry_session",
+        return_value=DummySession(Resp(402)),
+    ):
         with pytest.raises(OddsApiQuotaError):
             fetch_hr_nfl_moneylines(days_from=1)
 
 
 def test_hardrock_unauthorized_quota_raises():
     payload = {"success": False, "message": "Monthly plan quota reached"}
-    with patch("app.adapters.hardrock_odds.requests.get", return_value=Resp(401, data=payload)):
+    with patch(
+        "app.adapters.hardrock_odds._build_retry_session",
+        return_value=DummySession(Resp(401, data=payload)),
+    ):
         with pytest.raises(OddsApiQuotaError):
             fetch_hr_nfl_moneylines(days_from=1)
 
 
 def test_reference_quota_raises():
-    with patch("app.adapters.reference_probs.requests.get", return_value=Resp(429)):
+    with patch(
+        "app.adapters.reference_probs._build_retry_session",
+        return_value=DummySession(Resp(429)),
+    ):
         with pytest.raises(OddsApiQuotaError):
             reference_probs_for([{"game_id": "G1"}])
 
@@ -105,4 +128,3 @@ def test_run_once_quota_resets_on_new_month(monkeypatch):
         main.run_once()
         assert fetch_mock.call_count == 2
         assert push_mock.call_count == 1
-
