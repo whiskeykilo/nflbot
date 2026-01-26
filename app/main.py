@@ -160,6 +160,9 @@ def run_once():
         push(TITLE + " - Error", ["Failed to fetch Hard Rock NFL odds; aborting."])
         return
     logger.info("Fetched %d upcoming games from Hard Rock (spreads & MLs)", len(games))
+    if not games:
+        logger.info("No upcoming Hard Rock NFL games found; skipping notifications.")
+        return
     # Change detection: bank next poll if nothing moved
     global _LAST_SIG, _SKIP_NEXT
     sig = _hr_signature(games)
@@ -184,6 +187,9 @@ def run_once():
     # Only consider games that have Pinnacle reference probabilities
     games = [g for g in games if g["game_id"] in ref]
     logger.info("%d games matched to Pinnacle references", len(games))
+    if not games:
+        logger.info("No upcoming games matched Pinnacle references; skipping notifications.")
+        return
     def _interp_prob(side_map: Dict[float, float], target: float) -> float | None:
         if target in side_map:
             return side_map[target]
