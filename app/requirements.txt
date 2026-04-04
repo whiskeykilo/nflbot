@@ -1,4 +1,4 @@
 # Pinned for reproducible Docker/CI builds; bump intentionally on maintenance passes.
-requests==2.32.5
+requests==2.33.0
 python-dateutil==2.9.0.post0
 schedule==1.2.2
