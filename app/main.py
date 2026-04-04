@@ -598,4 +598,12 @@ if __name__=="__main__":
         schedule_jobs()
         while True:
             schedule.run_pending()
-            time.sleep(1)
+            idle = schedule.idle_seconds()
+            if idle is None:
+                time.sleep(1)
+            elif idle <= 0:
+                # Overdue or clock skew; avoid a tight loop but retry soon.
+                time.sleep(1)
+            else:
+                # Cap wake-ups at 5m so clock skew or schedule changes are picked up promptly.
+                time.sleep(min(idle, 300.0))
