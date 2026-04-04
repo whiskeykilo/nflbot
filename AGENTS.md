@@ -38,6 +38,7 @@ Short, project-specific notes for working in this repo.
 - **Python 3.12** is pre-installed; use `python3` (not `python`) to invoke.
 - **Lint:** `flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics` (critical errors only, matches CI). The full style pass with `--exit-zero` produces ~250 warnings and is non-blocking.
 - **Tests:** `pytest -v` — all 33 tests are fully mocked (no network or API key needed). Run from repo root.
-- **Live run:** `RUN_ONCE=1 LOG_LEVEL=INFO TEST_FORCE_OPPS=1 python3 -m app.main` — requires `THEODDSAPI` and `DISCORD_WEBHOOK_URL` env vars plus egress to `api.the-odds-api.com` and `discord.com`. The Cloud VM's egress restrictions may block these domains; the app handles the failure gracefully (logs + Discord error notification attempt).
+- **Live run:** `RUN_ONCE=1 LOG_LEVEL=INFO TEST_FORCE_OPPS=1 python3 -m app.main` — requires `THEODDSAPI` and `DISCORD_WEBHOOK_URL` env vars plus egress to `api.the-odds-api.com` and `discord.com` (both allowlisted).
+- **NFL offseason:** The Odds API will return 0 games during the offseason (roughly Feb–Sep). The app handles this gracefully. Use `TEST_FORCE_OPPS=1` to force alerts from whatever games exist; during offseason with 0 games, nothing is forced. You can verify Discord connectivity independently: `python3 -c "from app.core.notify import push; push('Test', ['hello'])"`.
 - **SQLite data dir:** The app writes to `/data/bets.sqlite`. Run `sudo mkdir -p /data && sudo chmod 777 /data` before a live run. Tests create their own temp DBs.
 - **PATH:** User-installed pip scripts land in `~/.local/bin` which may not be on `PATH`. Prefix commands with `export PATH="$HOME/.local/bin:$PATH"` or run tools via `python3 -m pytest`, `python3 -m flake8`.
