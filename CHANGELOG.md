@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.1.1 — 2026-06-18
+
+- Pre-season maintenance: bump `requests` to 2.34.2 (security fixes), refresh GitHub Actions, add Dependabot config, and run `pip-audit` in CI.
+
 ## v0.1.0 — 2025-08-30
 
 - First public release for NFL spreads.
